@@ -1,0 +1,6 @@
+[submodule "lib/roguefunctor"]
+	path = lib/roguefunctor
+	url = https://github.com/PPKFS/roguefunctor.git
+[submodule "lib/yaifl"]
+	path = lib/yaifl
+	url = https://github.com/PPKFS/yaifl.git

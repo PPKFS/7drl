@@ -1,0 +1,16 @@
+cradle:
+  cabal:
+    - path: "lib/yaifl/yaifl/src"
+      component: "lib:yaifl"
+
+    - path: "lib/yaifl/yaifl/test"
+      component: "yaifl:test:yaifl-test"
+
+    - path: "lib/yaifl/yaifl-rogue/src"
+      component: "executable:yaifl-rogue"
+
+    - path: "lib/roguefunctor/src"
+      component: "lib:roguefunctor"
+
+    - path: "7drl/src"
+      component: "executable:rogue"
