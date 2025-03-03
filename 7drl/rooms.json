@@ -1,0 +1,334 @@
+{
+  "rooms": [
+    {
+      "rectangle": {
+        "topLeft": [
+          -23,
+          -31
+        ],
+        "bottomRight": [
+          -14,
+          -20
+        ]
+      },
+      "level": 0,
+      "fixedType": "Conservatory",
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          -14,
+          -40
+        ],
+        "bottomRight": [
+          0,
+          -12
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          -6,
+          -48
+        ],
+        "bottomRight": [
+          14,
+          -40
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          0,
+          -40
+        ],
+        "bottomRight": [
+          5,
+          -25
+        ]
+      },
+      "level": 0,
+      "isIndoor": true,
+      "fixedType": "Stairway"
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          5,
+          -40
+        ],
+        "bottomRight": [
+          9,
+          -25
+        ]
+      },
+      "level": 0,
+      "isIndoor": true,
+      "fixedType": "Corridor"
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          9,
+          -33
+        ],
+        "bottomRight": [
+          12,
+          -30
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          9,
+          -30
+        ],
+        "bottomRight": [
+          12,
+          -28
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          9,
+          -28
+        ],
+        "bottomRight": [
+          12,
+          -25
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          0,
+          -25
+        ],
+        "bottomRight": [
+          12,
+          -10
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          0,
+          -10
+        ],
+        "bottomRight": [
+          12,
+          -5
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          9,
+          -40
+        ],
+        "bottomRight": [
+          17,
+          -33
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          12,
+          -33
+        ],
+        "bottomRight": [
+          22,
+          -15
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          12,
+          -15
+        ],
+        "bottomRight": [
+          24,
+          -3
+        ]
+      },
+      "level": 0,
+      "isIndoor": true,
+      "fixedType": "Foyer"
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          17,
+          -47
+        ],
+        "bottomRight": [
+          40,
+          -33
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          22,
+          -33
+        ],
+        "bottomRight": [
+          32,
+          -25
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          22,
+          -25
+        ],
+        "bottomRight": [
+          42,
+          -18
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          22,
+          -18
+        ],
+        "bottomRight": [
+          37,
+          -15
+        ]
+      },
+      "level": 0,
+      "isIndoor": true,
+      "fixedType": "Corridor"
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          29,
+          -15
+        ],
+        "bottomRight": [
+          37,
+          -8
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          32,
+          -33
+        ],
+        "bottomRight": [
+          37,
+          -29
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          32,
+          -29
+        ],
+        "bottomRight": [
+          37,
+          -25
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          37,
+          -33
+        ],
+        "bottomRight": [
+          39,
+          -25
+        ]
+      },
+      "level": 0,
+      "isIndoor": true,
+      "fixedType": "ServantCorridor"
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          37,
+          -18
+        ],
+        "bottomRight": [
+          42,
+          -5
+        ]
+      },
+      "level": 0,
+      "isIndoor": true
+    },
+    {
+      "rectangle": {
+        "topLeft": [
+          42,
+          -22
+        ],
+        "bottomRight": [
+          50,
+          -8
+        ]
+      },
+      "level": 0,
+      "isIndoor": true,
+      "fixedType": "Garage"
+    }
+  ],
+  "doors": []
+}

@@ -76,11 +76,13 @@ executable rogue
     MessageLog
     Gui
     EffectStack
+    Roguelike.Mansion.FloorPlan
     Rooms
 
   build-depends:
     , prettyprinter
     , split
+    , aeson
     , yaifl
     , roguefunctor
     , bearlibterminal

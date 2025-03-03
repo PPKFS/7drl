@@ -29,10 +29,11 @@ import Rooms
 import Yaifl.Core.Kinds.Object
 import Rogue.Array2D.Boxed
 import Yaifl.Std.Actions.Imports
+import Roguelike.Mansion.FloorPlan
 
 
 screenSize :: V2
-screenSize = V2 230 80
+screenSize = V2 80 60
 
 topViewportRectangle :: Int -> Rectangle
 topViewportRectangle topViewportSize = Rectangle (V2 0 0) (screenSize-V2 20 (view #y screenSize - topViewportSize))
@@ -54,6 +55,9 @@ bottomViewport topViewportSize = Viewport (bottomViewportRectangle topViewportSi
 sideViewport :: Int -> Viewport SidePart
 sideViewport topViewportSize = Viewport (sideViewportRectangle topViewportSize) (Just (Colour 0xFF22AAFF)) (Just (unicodeBorders, Colour 0xFFFFFFFF))
 
+debugFullViewport :: Viewport FullPart
+debugFullViewport = Viewport (rectangleFromDimensions (V2 0 0) screenSize) (Just (Colour 0xFFAAAAAA)) (Nothing)
+
 data ConstructionOptions wm = ConstructionOptions
   { activityCollectionBuilder :: ActivityCollection wm -> ActivityCollector wm
   , responseCollectionBuilder :: ResponseCollection wm -> ResponseCollector wm
@@ -61,7 +65,6 @@ data ConstructionOptions wm = ConstructionOptions
 
 defaultOptions :: (WMActivities wm ~ ActivityCollection wm, WMResponses wm ~ ResponseCollection wm) => ConstructionOptions wm
 defaultOptions = ConstructionOptions ActivityCollector ResponseCollector
-
 
 data MainPart = MainPart
   deriving stock (Eq, Ord, Show, Enum, Bounded, Generic)
@@ -124,8 +127,9 @@ beginPlay wa = do
 initialiseTerminal :: IO ()
 initialiseTerminal = do
   terminalSetText "log: file='awa.log', level=trace;"
-  terminalSetText "font: 'Iosevka-Term-02.ttf', codepage=437, size=16"
-  terminalSetText "bold font: 'Iosevka-Term-Bold-02.ttf', codepage=437, size=16"
+  terminalSetText "font: 'Iosevka-Term-02.ttf', codepage=437, size=32x32"
+  terminalSetText "0xE000: roguelikeSheet_transparent2.png, size=16x16, resize=32x32, align='top-left'"
+  -- terminalSetText "bold font: 'Iosevka-Term-Bold-02.ttf', codepage=437, size=16"
   pass
 
 makeWorld ::
@@ -188,6 +192,7 @@ renderAll topViewportSize = do
   renderBottomTerminal
   renderSideTerminal
   renderTopTerminal topViewportSize
+  drawDebugFloorPlan debugFullViewport
   where
     renderSideTerminal = do
       renderViewport (sideViewport topViewportSize) $
@@ -232,7 +237,6 @@ renderTopTerminal topViewportSize = do
     p' <- getPlayer'
     currRoom <- getLocation p'
     let tilemapData = currRoom ^. #objectData % #roomData % #space
-    print tilemapData
     traverseArrayWithCoord_ tilemapData $ \p td -> whenInViewport (mapViewport topViewportSize) p $ do
       let r = renderable td
       print p
