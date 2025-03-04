@@ -13,7 +13,7 @@ import Yaifl
 import Yaifl.Core.Effects
 import Yaifl.Core.Rules.RuleEffects
 import Yaifl.Core.Rules.Run
-import Yaifl.Prelude
+import Yaifl.Prelude hiding (Reader)
 import Yaifl.Std.Create
 import Yaifl.Std.EffectHandlers
 import Yaifl.Std.Rulebooks.ActionProcessing
@@ -30,10 +30,12 @@ import Yaifl.Core.Kinds.Object
 import Rogue.Array2D.Boxed
 import Yaifl.Std.Actions.Imports
 import Roguelike.Mansion.FloorPlan
+import Roguelike.Murder.NPC
+import Effectful.Reader.Static (Reader)
 
 
 screenSize :: V2
-screenSize = V2 80 60
+screenSize = 2 * V2 80 50
 
 topViewportRectangle :: Int -> Rectangle
 topViewportRectangle topViewportSize = Rectangle (V2 0 0) (screenSize-V2 20 (view #y screenSize - topViewportSize))
@@ -57,6 +59,9 @@ sideViewport topViewportSize = Viewport (sideViewportRectangle topViewportSize) 
 
 debugFullViewport :: Viewport FullPart
 debugFullViewport = Viewport (rectangleFromDimensions (V2 0 0) screenSize) (Just (Colour 0xFFAAAAAA)) (Nothing)
+
+dialogueMenuVP :: Viewport FullPart
+dialogueMenuVP = Viewport (rectangleFromDimensions (V2 20 20) (V2 40 40)) (Just (Colour 0xFF577dba)) (Nothing)
 
 data ConstructionOptions wm = ConstructionOptions
   { activityCollectionBuilder :: ActivityCollection wm -> ActivityCollector wm
@@ -126,9 +131,18 @@ beginPlay wa = do
 
 initialiseTerminal :: IO ()
 initialiseTerminal = do
+  let
+      size :: Either (Int, Int) Int
+      size = {- Left (7, 16)-- -} Right 12
+      scaleSize :: Int -> Either (Int, Int) Int
+      scaleSize s = bimap (bimap (s*) (s*)) (s*) size
+      sizeStr s = either (\(x, y) -> show x <> "x" <> show y) (\v -> show v <> "x" <> show v) s
+      fnt = "square.ttf"
+      _fnt = "Iosevka-Term-02.ttf"
   terminalSetText "log: file='awa.log', level=trace;"
-  terminalSetText "font: 'Iosevka-Term-02.ttf', codepage=437, size=32x32"
-  terminalSetText "0xE000: roguelikeSheet_transparent2.png, size=16x16, resize=32x32, align='top-left'"
+  terminalSetText $ "font: '" <> fnt <> "', codepage=437, size=" <> sizeStr size
+  terminalSetText $ "0xE000: roguelikeSheet_transparent2.png, size=16x16, align='top-left', resize=" <> sizeStr (scaleSize 2)
+  terminalSetText $ npcSpriteTextIndex <> ": portraits_border.png, align='top-left', size=80x80, resize=" <> sizeStr (scaleSize scaleUpPfp)
   -- terminalSetText "bold font: 'Iosevka-Term-Bold-02.ttf', codepage=437, size=16"
   pass
 
@@ -189,11 +203,13 @@ renderAll topViewportSize = do
   modifyBuffer (#buffer .~ [])
   updateMessageLog msgList
   -- let msgLog = for_ msgList
-  renderBottomTerminal
-  renderSideTerminal
-  renderTopTerminal topViewportSize
-  drawDebugFloorPlan debugFullViewport
+  --renderBottomTerminal
+  --renderSideTerminal
+  --renderTopTerminal topViewportSize
+  -- drawDebugFloorPlan debugFullViewport
+  drawDebugDialogueBox dialogueMenuVP
   where
+    renderSideTerminal :: Eff es ()
     renderSideTerminal = do
       renderViewport (sideViewport topViewportSize) $
         viewportPrint (V2 3 3) Nothing (Colour 0xFF000000) "More info..."
@@ -239,7 +255,6 @@ renderTopTerminal topViewportSize = do
     let tilemapData = currRoom ^. #objectData % #roomData % #space
     traverseArrayWithCoord_ tilemapData $ \p td -> whenInViewport (mapViewport topViewportSize) p $ do
       let r = renderable td
-      print p
       terminalLayer' (toLayer MapPart)
       terminalColour (r ^. #foreground)
       terminalBkColour (r ^. #background)
@@ -247,3 +262,26 @@ renderTopTerminal topViewportSize = do
     rName <- sayText (currRoom ^. #name)
     withV2 (V2 15 14) $ \x y -> terminalPrintText x y rName
   pass
+
+scaleUpPfp :: Int
+scaleUpPfp = 8
+vpDrawSprite :: (AsLayer l, Reader (Viewport l) :> es,  IOE :> es) => V2 -> Char -> Eff es ()
+vpDrawSprite pos v = viewportDrawTile pos Nothing (0xFFFFFFFF) v
+drawDebugDialogueBox ::
+  IOE :> es
+  => AsLayer l
+  => Bounded l
+  => Enum l
+  => Viewport l
+  -> Eff es ()
+drawDebugDialogueBox v = renderViewport v $ do
+  cor <- loadDatasets
+  p <- generatePerson cor 1
+  clearViewport v
+  vpDrawSprite (V2 1 1) (profilePicture p)
+  let rightOfImage y = V2 (scaleUpPfp + 1) ( y + 1)
+  viewportPrint (rightOfImage 1) Nothing (0xFFFFFFFFF) $ "Name: " <> (firstName p) <> " " <> (surname p)
+  viewportPrint (rightOfImage 2) Nothing (0xFFFFFFFFF) $ "Gender: " <> (display $ view #gender p)
+  viewportPrint (rightOfImage 3) Nothing (0xFFFFFFFFF) $ "Profession: " <> (profession p)
+  pass
+
