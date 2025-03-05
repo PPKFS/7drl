@@ -79,6 +79,7 @@ executable rogue
     Roguelike.Mansion.FloorPlan
     Roguelike.Murder.History
     Roguelike.Murder.NPC
+    Roguelike.Murder.Personality
     Rooms
 
   build-depends:

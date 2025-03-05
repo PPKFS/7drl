@@ -4,10 +4,14 @@ module Roguelike.Murder.NPC where
 import Yaifl.Prelude
 import Data.Vector qualified as V
 import Yaifl.Std.Kinds.Person
-import System.Random.Stateful (UniformRange(uniformRM), globalStdGen)
+import System.Random.Stateful (UniformRange(uniformRM), globalStdGen, uniformEnumM)
 import qualified Data.Text.Lazy.Builder as TLB
 import qualified Data.Text as T
 import qualified Data.Map as M
+import Data.List (groupBy)
+import qualified Data.List as L
+import Roguelike.Murder.Personality
+import Roguelike.Murder.History
 
 -- the first index we use for the sprite pack
 npcSpriteIndex :: Int
@@ -46,21 +50,7 @@ instance Display BasicPerson where
 genderRatios :: V.Vector Gender
 genderRatios = V.fromList [Male, Male, Male, Male, Female, Female, Female, Female, NonBinary, NonBinary]
 
-data Personality = Personality
-  { loyalty :: Int
-  , relationships :: M.Map Int Int
-  } deriving stock (Eq, Ord, Show, Generic)
 
-loyaltyThreshold :: (Int, Int, Int)
-loyaltyThreshold = (6, 8, 9)
-
-randomVectorElement ::
-  MonadIO m
-  => V.Vector a
-  -> m a
-randomVectorElement v = do
-  i <- uniformRM (0, V.length v - 1) globalStdGen
-  return $ v V.! i
 
 dataPath :: FilePath
 dataPath = "data"
@@ -125,21 +115,32 @@ generatePerson corpora i = do
   surname <- randomVectorElement $ surnames corpora
   profession <- randomVectorElement $ professions corpora
   profilePicture <- randomVectorElement $ fromMaybe (error "impossible") $ M.lookup gender $ images corpora
-  loyalty <- weightByThree
-  let personality = Personality loyalty (M.empty)
+  personality <- generatePersonality
   return $ BasicPerson { personId = i, gender, firstName, surname, profession, profilePicture, personality}
 
-weightByThree :: MonadIO m => m Int
-weightByThree = (\x -> if x <= (view _1 loyaltyThreshold) then 1 else if x <= (view _2 loyaltyThreshold) then 2 else 3) <$> uniformRM (1, 10) globalStdGen
+pairs :: [a] -> [(a, a)]
+pairs l = [(x,y) | (x:ys) <- tails l, y <- ys]
 
 generateAllPeople ::
     MonadIO m
   => Corpora
   -> Int
-  -> m [BasicPerson]
+  -> m (V.Vector BasicPerson)
 generateAllPeople corpora num = do
   people <- forM [0..num] (generatePerson corpora)
-  peopleWithInitialRelations <- forM people (do
+  let relationships = pairs people
+  initRels <- mconcat <$> forM relationships (\(p1, p2) -> makeRelationship (personId p1, trusting . personality $ p1) (personId p2, trusting . personality $ p2))
+  let splitRels = M.fromList $ map (\ls -> (fst $ L.head ls, map snd ls)) $ groupBy (\(a, _) (b, _) -> a == b) initRels
+  let peopleWithRels = map (\person -> let relevantRels = fromMaybe (error "impossible") $ M.lookup (personId person) splitRels
+        in person & #personality % #relationships .~ M.fromList relevantRels) people
+  return $ V.fromList peopleWithRels
 
-    )
-  return people
+murderSomeone ::
+  MonadIO m
+  => V.Vector BasicPerson
+  -> m (Murder Int, V.Vector BasicPerson)
+murderSomeone people = do
+  victim <- randomVectorElement people
+  motive <- uniformEnumM @Motive globalStdGen
+  event <- justifyMotive people victim motive
+  return (fmap personId $ makeMurder motive event, people)

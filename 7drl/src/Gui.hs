@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Gui where
 
 import BearLibTerminal
@@ -32,10 +33,13 @@ import Yaifl.Std.Actions.Imports
 import Roguelike.Mansion.FloorPlan
 import Roguelike.Murder.NPC
 import Effectful.Reader.Static (Reader)
+import Roguelike.Murder.Personality
+import Roguelike.Murder.History
+import qualified Data.Vector as V
 
 
 screenSize :: V2
-screenSize = 2 * V2 80 50
+screenSize = 2 * V2 80 80
 
 topViewportRectangle :: Int -> Rectangle
 topViewportRectangle topViewportSize = Rectangle (V2 0 0) (screenSize-V2 20 (view #y screenSize - topViewportSize))
@@ -61,7 +65,7 @@ debugFullViewport :: Viewport FullPart
 debugFullViewport = Viewport (rectangleFromDimensions (V2 0 0) screenSize) (Just (Colour 0xFFAAAAAA)) (Nothing)
 
 dialogueMenuVP :: Viewport FullPart
-dialogueMenuVP = Viewport (rectangleFromDimensions (V2 20 20) (V2 40 40)) (Just (Colour 0xFF577dba)) (Nothing)
+dialogueMenuVP = Viewport (rectangleFromDimensions (V2 20 0) (V2 80 120)) (Just (Colour 0xFF577dba)) (Nothing)
 
 data ConstructionOptions wm = ConstructionOptions
   { activityCollectionBuilder :: ActivityCollection wm -> ActivityCollector wm
@@ -138,7 +142,7 @@ initialiseTerminal = do
       scaleSize s = bimap (bimap (s*) (s*)) (s*) size
       sizeStr s = either (\(x, y) -> show x <> "x" <> show y) (\v -> show v <> "x" <> show v) s
       fnt = "square.ttf"
-      _fnt = "Iosevka-Term-02.ttf"
+      -- _fnt = "Iosevka-Term-02.ttf"
   terminalSetText "log: file='awa.log', level=trace;"
   terminalSetText $ "font: '" <> fnt <> "', codepage=437, size=" <> sizeStr size
   terminalSetText $ "0xE000: roguelikeSheet_transparent2.png, size=16x16, align='top-left', resize=" <> sizeStr (scaleSize 2)
@@ -267,6 +271,7 @@ scaleUpPfp :: Int
 scaleUpPfp = 8
 vpDrawSprite :: (AsLayer l, Reader (Viewport l) :> es,  IOE :> es) => V2 -> Char -> Eff es ()
 vpDrawSprite pos v = viewportDrawTile pos Nothing (0xFFFFFFFF) v
+
 drawDebugDialogueBox ::
   IOE :> es
   => AsLayer l
@@ -276,12 +281,54 @@ drawDebugDialogueBox ::
   -> Eff es ()
 drawDebugDialogueBox v = renderViewport v $ do
   cor <- loadDatasets
-  p <- generatePerson cor 1
+  people <- generateAllPeople cor 20
+  (murder, _) <- murderSomeone people
+  let (murdId, vicId, mbOtherId) = deconstructEvent (cause murder)
   clearViewport v
-  vpDrawSprite (V2 1 1) (profilePicture p)
-  let rightOfImage y = V2 (scaleUpPfp + 1) ( y + 1)
-  viewportPrint (rightOfImage 1) Nothing (0xFFFFFFFFF) $ "Name: " <> (firstName p) <> " " <> (surname p)
-  viewportPrint (rightOfImage 2) Nothing (0xFFFFFFFFF) $ "Gender: " <> (display $ view #gender p)
-  viewportPrint (rightOfImage 3) Nothing (0xFFFFFFFFF) $ "Profession: " <> (profession p)
+
+  forM_ (zip [0..] (toList people)) $ \(i, p1) -> do
+    let yval = (1+((i `mod` 10) * scaleUpPfp) + (i `mod` 10))
+    let xval = if i < 10 then 1 else 42
+    vpDrawSprite (V2 xval yval) (profilePicture p1)
+    let rightOfImage y = V2 (scaleUpPfp + xval) (yval + y)
+    let col = if
+          | vicId == personId p1 -> 0xFF801121
+          | murdId == personId p1 -> 0xFF640d6e
+          | mbOtherId == Just (personId p1) -> 0xFF5e5a17
+          | otherwise -> 0xFFFFFFFFF
+    if (col /= 0xFFFFFFFF) then terminalBkColour 0xFF222222 else terminalBkColour 0xFF577dba
+    viewportPrint (rightOfImage 1) Nothing col $ "Name: " <> niceName p1
+    viewportPrint (rightOfImage 2) Nothing col $ "Gender: " <> (display $ view #gender p1)
+    viewportPrint (rightOfImage 3) Nothing col $ "Profession: " <> (profession p1)
+    viewportPrint (rightOfImage 4) Nothing col $ "Personality: " <> (show . loyalty . personality $ p1)
+  viewportPrint (V2 1 (4+(11 * scaleUpPfp))) Nothing (0xFFFFFFFF) (prettyMurder murder people)
   pass
 
+niceName :: BasicPerson -> Text
+niceName p1 = (firstName p1) <> " " <> (surname p1)
+prettyMurder :: Murder Int -> V.Vector BasicPerson -> Text
+prettyMurder murder bp =
+  let lookupPerson i = bp V.! i
+      nicerMurder = fmap lookupPerson murder
+      disp = niceName
+      mbOther = involved nicerMurder
+      causeBy = case cause nicerMurder of
+        WrongedSomeone v p1 -> [disp p1, " was wronged by ", disp v]
+        WrongedAFriend v p1 p2 -> [disp p1, " the friend of ", disp p2, " was wronged by ", disp v]
+        EnviedBy v p1 -> [disp v, " was envied by ", disp p1]
+        LoveTriangle v p1 p2 -> [disp p1, " loved ", disp p2, ", but was caught in a love triangle with ", disp v]
+        SpurnedLoveFrom v p1 -> [disp p1, " loved ", disp v, " but the love was not returned"]
+        PassedOver v p1 -> [disp p1, ", the sibling of ", disp v, " was passed over in the line of inheritance"]
+        IsPoorDesperate v p1 -> [disp p1, " was poor and struggling, so aimed to steal from ", disp v]
+      motiveBy = case motive nicerMurder of
+        Revenge -> "Driven by revenge"
+        Jealousy -> "Driven by jealousy"
+        JealousLover -> "Driven by the desire to have " <> (fromMaybe (error "impossible") $ firstName <$> mbOther) <> " for themselves"
+        SpurnedLove -> "Driven by spite"
+        Inheritance -> "Driven by envy"
+        Stealing -> "Driven by desperation"
+      pronounOf p = case view #gender p of
+        Male -> "he"
+        Female -> "she"
+        _ -> "they"
+  in mconcat $ causeBy <> [". ", motiveBy, ", ", pronounOf (murderer nicerMurder), " killed ", (firstName (victim nicerMurder)), "." ]
