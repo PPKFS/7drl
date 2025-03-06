@@ -145,7 +145,7 @@ initialiseTerminal = do
       -- _fnt = "Iosevka-Term-02.ttf"
   terminalSetText "log: file='awa.log', level=trace;"
   terminalSetText $ "font: '" <> fnt <> "', codepage=437, size=" <> sizeStr size
-  terminalSetText $ "0xE000: roguelikeSheet_transparent2.png, size=16x16, align='top-left', resize=" <> sizeStr (scaleSize 2)
+  terminalSetText $ "0xE000: roguelikeSheet_transparent2.png, size=16x16, align='top-left', resize=" <> sizeStr (scaleSize scaleUpTiles)
   terminalSetText $ npcSpriteTextIndex <> ": portraits_border.png, align='top-left', size=80x80, resize=" <> sizeStr (scaleSize scaleUpPfp)
   -- terminalSetText "bold font: 'Iosevka-Term-Bold-02.ttf', codepage=437, size=16"
   pass
@@ -210,8 +210,8 @@ renderAll topViewportSize = do
   --renderBottomTerminal
   --renderSideTerminal
   --renderTopTerminal topViewportSize
-  -- drawDebugFloorPlan debugFullViewport
-  drawDebugDialogueBox dialogueMenuVP
+  drawDebugFloorPlan debugFullViewport
+  --drawDebugDialogueBox dialogueMenuVP
   where
     renderSideTerminal :: Eff es ()
     renderSideTerminal = do
@@ -282,7 +282,8 @@ drawDebugDialogueBox ::
 drawDebugDialogueBox v = renderViewport v $ do
   cor <- loadDatasets
   people <- generateAllPeople cor 20
-  (murder, _) <- murderSomeone people
+  (murder, _) <- murderSomeone people Nothing
+  redHerrings <- forM [0..5] (const $ murderSomeone people (Just $ people V.! (victim murder) ))
   let (murdId, vicId, mbOtherId) = deconstructEvent (cause murder)
   clearViewport v
 
@@ -302,6 +303,7 @@ drawDebugDialogueBox v = renderViewport v $ do
     viewportPrint (rightOfImage 3) Nothing col $ "Profession: " <> (profession p1)
     viewportPrint (rightOfImage 4) Nothing col $ "Personality: " <> (show . loyalty . personality $ p1)
   viewportPrint (V2 1 (4+(11 * scaleUpPfp))) Nothing (0xFFFFFFFF) (prettyMurder murder people)
+  forM_ (zip [1..] redHerrings) $ \(i, (x, _)) -> viewportPrint (V2 1 (4+(11 * scaleUpPfp) + (3*i))) Nothing (0xFFFFFFFF) (prettyMurder x people)
   pass
 
 niceName :: BasicPerson -> Text
@@ -314,7 +316,7 @@ prettyMurder murder bp =
       mbOther = involved nicerMurder
       causeBy = case cause nicerMurder of
         WrongedSomeone v p1 -> [disp p1, " was wronged by ", disp v]
-        WrongedAFriend v p1 p2 -> [disp p1, " the friend of ", disp p2, " was wronged by ", disp v]
+        WrongedAFriend v p1 p2 -> [disp p1, ", the friend of ", disp p2, ", was wronged by ", disp v]
         EnviedBy v p1 -> [disp v, " was envied by ", disp p1]
         LoveTriangle v p1 p2 -> [disp p1, " loved ", disp p2, ", but was caught in a love triangle with ", disp v]
         SpurnedLoveFrom v p1 -> [disp p1, " loved ", disp v, " but the love was not returned"]

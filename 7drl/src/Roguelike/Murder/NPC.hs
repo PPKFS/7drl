@@ -138,9 +138,10 @@ generateAllPeople corpora num = do
 murderSomeone ::
   MonadIO m
   => V.Vector BasicPerson
+  -> Maybe BasicPerson
   -> m (Murder Int, V.Vector BasicPerson)
-murderSomeone people = do
-  victim <- randomVectorElement people
+murderSomeone people mbVictim = do
+  victim <- maybe (randomVectorElement people) return mbVictim
   motive <- uniformEnumM @Motive globalStdGen
   event <- justifyMotive people victim motive
   return (fmap personId $ makeMurder motive event, people)

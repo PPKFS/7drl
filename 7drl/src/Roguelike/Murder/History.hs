@@ -65,7 +65,7 @@ deconstructEvent = \case
   WrongedSomeone v p1 -> (v, p1, Nothing)
   WrongedAFriend v p1 p2 -> (v, p2, Just p1)
   EnviedBy v p1 -> (v, p1, Nothing)
-  LoveTriangle v p1 p2 -> (v, p2, Just p1)
+  LoveTriangle v p1 p2 -> (v, p1, Just p2)
   SpurnedLoveFrom v p1 -> (v, p1, Nothing)
   PassedOver v p1 -> (v, p1, Nothing)
   IsPoorDesperate v p1 -> (v, p1, Nothing)
@@ -89,7 +89,7 @@ justifyMotive ::
   -> m (HistoryEvent a) -- create the key event that leads to this murder
 justifyMotive people victim motive = do
   let pickOne = randomVectorElement
-  p1 <- pickOne people
+  p1 <- whileM (\p -> (p == victim)) $ pickOne people
   p2 <- whileM (\p -> (p == p1) || (p == victim) ) $ pickOne people
   when (p1 == p2) (error "murderer and victim were the same person")
   case motive of

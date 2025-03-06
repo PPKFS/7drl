@@ -10,9 +10,14 @@ import Rogue.Rendering.Viewport
 import Effectful.Reader.Static
 import System.Random.Shuffle
 import System.Random.Stateful (UniformRange(uniformRM), globalStdGen)
-import Data.List (partition)
+import Data.List (partition, nub, groupBy)
 import Rogue.Colour (Colour(..))
-import Roguelike.Murder.NPC
+import Yaifl.Std.Kinds.Direction (Direction (..), HasOpposite (..))
+import qualified Data.Map as M
+import Rogue.Geometry.Line
+import qualified Data.List as L
+import Yaifl.Std.Create (addRoom', addRoom, done, AddObjects)
+import Yaifl (HasStandardProperties)
 
 data RoomType =
   Conservatory
@@ -130,21 +135,28 @@ instance FromJSON RawRoomArea
 
 data RawFloorPlan = RawFloorPlan
   { rooms :: [RawRoomArea]
-  , doors :: [()]
+  , openThresholds :: [Rectangle]
+  , doors :: [V2]
+  , peopleLocations :: [V2]
   } deriving stock (Eq, Ord, Show, Generic)
     deriving anyclass (FromJSON)
 
+type RoomId = Int
 data RoomArea = RoomArea
-  { rectangle :: Rectangle
+  { roomId :: RoomId
+  , rectangle :: Rectangle
   , level :: Int
   , roomType :: RoomType
   , isIndoor :: Bool
+  , thresholds :: [([V2], RoomId, Direction)]
+  , doors :: [(V2, RoomId, Direction)]
+  , connections :: [RoomId]
   } deriving stock (Eq, Ord, Show, Generic)
-
 
 data FloorPlan = FloorPlan
   { rooms :: [RoomArea]
-  , doors :: [()]
+  , openThresholds :: [(V2, V2, RoomId, RoomId, Direction)]
+  , doors :: [(V2, RoomId, RoomId, Direction)]
   } deriving stock (Eq, Ord, Show, Generic)
 
 data FullPart = FullPart
@@ -152,6 +164,9 @@ data FullPart = FullPart
 
 instance AsLayer FullPart where
   toLayer = const 250
+
+scaleUpTiles :: Num a => a
+scaleUpTiles = 3
 
 translateFloorPlan ::
   V2
@@ -173,13 +188,18 @@ sheetCoordToChar (V2 x y) = liftToSheet ((y * 57) + x)
 
 rawRoomToRoom ::
   RoomType
+  -> RoomId
   -> RawRoomArea
   -> RoomArea
-rawRoomToRoom rt raw = RoomArea
-  { rectangle = view #rectangle raw
+rawRoomToRoom rt i raw = RoomArea
+  { roomId = i
+  , rectangle = view #rectangle raw
   , level = view #level raw
   , roomType = fromMaybe rt (fixedType raw)
   , isIndoor = view #isIndoor raw
+  , thresholds = []
+  , doors = []
+  , connections = []
   }
 
 makeFloorPlan ::
@@ -189,17 +209,59 @@ makeFloorPlan = do
   fp <- loadFp
   seededRoomList <- take emptyDownstairs . (requiredGroundFloorPool <>) <$> (liftIO $ shuffleM (seededGroundFloorRoomPool))
   sizedRoomList <- sortOn fst <$> mapM sizeUpRoom seededRoomList
-  let (fixedRooms, sortedRooms) =
-        bimap (map (rawRoomToRoom (error "fixed room had no room type"))) (map (\(x, y) -> rawRoomToRoom x y))
-        . second (zip (map snd sizedRoomList)
-        . sortOn (area . view #rectangle))
-        . partition (isJust . fixedType) $ (view #rooms fp)
+  let -- this is all about sorting and assigning rooms to their specific room type and id
+      partRooms = partition (isJust . fixedType . snd) $ zip [0..] (view #rooms fp)
+      p1 = (zip (map snd sizedRoomList)) . sortOn (area . view #rectangle . snd) $ (snd partRooms)
+      zippedRooms = (map (\(x, (xId, y)) -> rawRoomToRoom x xId y) ) p1
+      fixedRooms = (map (\(xId, r) -> rawRoomToRoom (error "fixed room had no room type") xId r)) (fst partRooms)
+      allRooms = fixedRooms <> zippedRooms
+
+      allRects = map (\r -> (roomId r, (view #rectangle r))) allRooms
+      -- for each threshold (a line between two rooms), find whichever overlapping wall it is cutting out and find those two adjoining rooms
+      assignThresholds = map (\x -> let transX = translate (V2 25 50) x in case filter (\(_, rl) ->
+        let (V2 _ y3) = topLeft transX
+            isHoriz = y3 == view _2 (bottomRight transX) in
+        liesOnAWallOfRectangle rl isHoriz (topLeft transX)
+        ) allRects
+        of
+          [x1, x2] -> (topLeft transX, bottomRight transX, fst x1, fst x2,
+
+          -- same y = horizontal = north or south
+            if view _2 (bottomRight transX) == view _2 (topLeft transX)
+            -- if it matches the y of the top of the first room then it's north
+            then if view _2 (topLeft transX) == view _2 (topLeft $ snd x1) then North else South
+            else if view _1 (topLeft transX) == view _1 (topLeft $ snd x1) then West else East)
+          xr -> error $ "unexpected threshold" <> show transX <> show xr) (view #openThresholds fp)
+      assignDoors = map (\x -> let transX = x + (V2 25 50) in case filter (\(_, rl) ->
+        liesOnAWallOfRectangle rl True (transX) || liesOnAWallOfRectangle rl False (transX)
+        ) allRects
+        of
+          [x1, x2] -> (transX, fst x1, fst x2, if
+            | view _1 transX == (view _1 (topLeft (snd x1))) -> West
+            | view _1 transX == (view _1 (bottomRight (snd x1)) - 1) -> East
+            | view _2 transX == (view _2 (topLeft (snd x1))) -> North
+            | view _2 transX == (view _2 (bottomRight (snd x1)) - 1) -> South
+            | otherwise -> error (show transX <> show (snd x1) <> " had no match on door location")
+            )
+          xr -> error $ "unexpected door" <> show x <> show xr) (view #doors fp)
+  print assignDoors
+  let addThresh = foldl' (\rAcc (t1, t2, r1, r2, d) -> rAcc & ix r1 % #thresholds %~ (amendThr r2 t1 t2 d) & ix r2 % #thresholds %~ (amendThr r1 t1 t2 (opposite d))) (sortOn roomId allRooms) assignThresholds
+      addDoors = foldl' (\rAcc (dl, r1, r2, d) -> rAcc & ix r1 % #doors %~ ((dl, r2, d):) & ix r2 % #doors %~ ((dl, r1, (opposite d)):)) addThresh assignDoors
+      addConns = map (\r -> r & #connections .~ (sortNub $ (map (view _2) $ view #thresholds r) <> map (view _2) (view #doors r))) addDoors
   return $ FloorPlan
-    { doors = []
-    , rooms = fixedRooms <> sortedRooms
+    { doors = assignDoors
+    , rooms = addConns
+    , openThresholds = assignThresholds
     }
   where
-    loadFp = translateFloorPlan (V2 25 50) . either (\e -> error $ "could not load floorplan " <> show e) id <$> liftIO (eitherDecodeFileStrict' @RawFloorPlan "7drl/data/rooms.json")
+    liesOnAWallOfRectangle rl isHoriz p =
+      let (V2 x1 y1) = topLeft rl
+          (V2 x2 y2) = bottomRight rl
+          (V2 x3 y3) = p
+      in if isHoriz then ((y3 == (y2 - 1)) || (y3 == y1)) && x3 <= (x2 - 1) && x3 >= x1 else ((x3 == x1) || ((x2 - 1) == x3)) && y3 <= (y2 - 1) && y3 >= y1
+
+    amendThr r (V2 x1 y1) (V2 x2 y2) d = (([V2 x y | x <- [x1 .. x2], y <- [y1 .. y2]], r, d) :)
+    loadFp = translateFloorPlan (V2 25 50) . either (\e -> error $ "could not load floorplan " <> show e) id <$> liftIO (eitherDecodeFileStrict' @RawFloorPlan "data/rooms.json")
     sizeUpRoom r = do
       s <- uniformRM (roomSizeBounds r) globalStdGen
       return (s, r)
@@ -212,13 +274,14 @@ drawDebugFloorPlan vp = renderViewport vp $ do
   terminalClear
   fp <- makeFloorPlan
   let zSorted = sortOn (\r -> (r ^. #rectangle % #topLeft % _2)) (fp ^. #rooms)
+      roomsById = M.fromList (map (\x -> (view #roomId x,x)) zSorted)
+      roomLookup k = fromMaybe (error "impossible") $ M.lookup k roomsById
   terminalComposition CompositionOn
   forM_ (zSorted) $ \r -> do
     terminalLayer 1
-    forM_ (rectanglePoints Horizontal $ view #rectangle r) $ \t -> viewportDrawTile (2*t) Nothing 0xFFFFFFFF (sheetCoordToChar (V2 8 4))
-    forM_ (rectangleEdges $ view #rectangle r) $ \t -> viewportDrawTile (2*t) Nothing 0xFFFFFFFF (sheetCoordToChar (V2 8 4))
-    let c = liftToSheet 0
-    renderBorderTileset (view #rectangle r) (BorderTileSet
+    forM_ (rectanglePoints Horizontal $ view #rectangle r) $ \t -> viewportDrawTile (scaleUpTiles*t) Nothing 0xFFFFFFFF (sheetCoordToChar (V2 8 4))
+    forM_ (rectangleEdges $ view #rectangle r) $ \t -> viewportDrawTile (scaleUpTiles*t) Nothing 0xFFFFFFFF (sheetCoordToChar (V2 8 4))
+    renderBorderTileset (mconcat $ map (view _1) $ thresholds r) (view #rectangle r) (BorderTileSet
       { -- tl = sheetCoordToChar (V2 4 13)
       -- , tr = sheetCoordToChar (V2 0 13)
         tl = sheetCoordToChar (V2 37 12)
@@ -231,17 +294,23 @@ drawDebugFloorPlan vp = renderViewport vp $ do
       , t = sheetCoordToChar (V2 35 12)
       })
     terminalLayer 5
-    viewportPrint (2*((view (#rectangle % #topLeft) r) + (V2 1 1))) Nothing (Colour 0xFF000000) $ (show $ view #roomType r)
+    viewportPrint (scaleUpTiles*((view (#rectangle % #topLeft) r) + (V2 1 1))) Nothing (Colour 0xFF000000) $ (show $ view #roomType r)
+    let lis = mconcat $ map (\i -> tranThong (centre (view #rectangle r) - V2 1 1) id i)
+          (map (view _1) (view #doors r) <> (map (\x -> (view _1 x) L.!! (length (view _1 x) `div` 2)) $ (thresholds r)))
+    forM_ lis $ \l -> viewportDrawTile (scaleUpTiles*l) Nothing 0xFFFFFFFF (sheetCoordToChar (V2 32 9))
+    pass
+  forM_ (view #doors fp) (\(l, r1, r2, d) -> viewportDrawTile (scaleUpTiles*l) Nothing 0xFFFFFFFF (sheetCoordToChar (V2 32 0)))
 
 renderBorderTileset ::
   IOE :> es
   => AsLayer a
   => Reader (Viewport a) :> es
-  => Rectangle
+  => [V2]
+  -> Rectangle
   -> BorderTileSet
   -> Eff es ()
-renderBorderTileset rect BorderTileSet{..} =  do
-  let f v = viewportDrawTile (2*v) Nothing (0xFFFFFFFF)
+renderBorderTileset thr rect BorderTileSet{..} =  do
+  let f v a = unless (v `elem` thr) $ viewportDrawTile (scaleUpTiles*v) Nothing (0xFFFFFFFF) a
   f (topLeft rect) tl
   f (bottomRight rect - V2 1 1) br
   f (topRight rect - V2 1 0) tr
@@ -252,3 +321,19 @@ renderBorderTileset rect BorderTileSet{..} =  do
   forM_ [view _2 (topLeft rect) + 1 .. view _2 (bottomLeft rect) - 2 ] $ \y -> do
     f (V2 (rect ^. #topLeft % _1) y) l
     f (V2 (rect ^. #bottomRight % _1 - 1) y) r
+
+floorPlanToYaiflWorld ::
+  HasStandardProperties wm
+  => AddObjects wm es
+  => FloorPlan
+  -> Eff es ()
+floorPlanToYaiflWorld fp = do
+  -- we want to make each room, with a name
+  roomIds <- (zip (map roomId (view #rooms fp))) <$> forM (view #rooms fp) (\room -> do
+    addRoom (show (roomType room)) ! #description ("It's a room.") ! done)
+
+  -- then we want to go back over and add connections and doors
+  forM_ (view #openThresholds fp) (const pass)
+  --  and doors
+  forM_ (view #doors fp) (const pass)
+

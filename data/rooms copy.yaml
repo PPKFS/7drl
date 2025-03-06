@@ -213,6 +213,87 @@ rooms:
     level: 0
     isIndoor: true
     fixedType: Garage
+openThresholds:
+  - rectangle:
+      topLeft:
+        - 14
+        - -15
+      bottomRight:
+        - 20
+        - -15
+  - rectangle:
+      topLeft:
+        - 0
+        - -20
+      bottomRight:
+        - 0
+        - -16
 
+  - rectangle:
+      topLeft:
+        - -5
+        - -40
+      bottomRight:
+        - -1
+        - -40
 
+  - rectangle:
+      topLeft:
+        - 1
+        - -25
+      bottomRight:
+        - 4
+        - -25
+  - rectangle:
+      topLeft:
+        - 6
+        - -25
+      bottomRight:
+        - 8
+        - -25
+  - rectangle:
+      topLeft:
+        - 6
+        - -40
+      bottomRight:
+        - 8
+        - -40
+
+  - rectangle:
+      topLeft:
+        - 22
+        - -31
+      bottomRight:
+        - 22
+        - -27
+
+  - rectangle:
+      topLeft:
+        - 22
+        - -17
+      bottomRight:
+        - 22
+        - -16
+  - rectangle:
+      topLeft:
+        - 37
+        - -17
+      bottomRight:
+        - 37
+        - -16
+
+  - rectangle:
+      topLeft:
+        - 38
+        - -25
+      bottomRight:
+        - 38
+        - -25
+  - rectangle:
+      topLeft:
+        - 38
+        - -33
+      bottomRight:
+        - 38
+        - -33
 doors: []
